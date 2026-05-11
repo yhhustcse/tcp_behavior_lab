@@ -1,0 +1,31 @@
+# Build outputs
+ftp_reassemble_info
+*.o
+
+# Recovered samples and lab outputs
+recovered_sample
+*.pcap
+*.pcapng
+*.idb
+*.i64
+*.til
+*.nam
+*.id0
+*.id1
+*.id2
+*.json
+payload_*.bin
+trace.log
+qemu_syscall.log
+sample_stdout.log
+core
+core.*
+hustlogo.png
+system.sh
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+__pycache__/
+*.pyc
