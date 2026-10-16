@@ -10,19 +10,32 @@
 6. 根据结构化约束自动生成 payload；
 7. 使用 QEMU 用户态模拟执行样本，验证漏洞与恶意行为。
 
+## 关于"TCP 流重组"与"FTP"的关系
+
+工具名和源码文件名都带 `ftp`，容易让人误以为做的是"FTP 协议解析"，这里说明清楚边界：
+
+**核心做的是 TCP 流重组，FTP 只负责"确定该重组哪条流"。**
+
+* **TCP 层（通用、与协议无关）**：按四元组区分会话，取 TCP 序号 `seq`，处理乱序、重传去重、重叠区间合并、
+  丢包空洞、以及 32 位序号回绕。这一段逻辑换任何应用层协议都成立。
+* **FTP 层（本样例的定位手段）**：抄包时并不知道哪条 TCP 流里传的是目标文件。所以要解析控制通道的
+  `USER / PASS / PORT / PASV / 227 / RETR / STOR`，从 `PORT` 或 `227` 响应里解出数据连接的 IP 与端口，
+  再按 `RETR`（服务器→客户端）或 `STOR`（客户端→服务器）确定传输方向，据此从全流量里筛出该条数据流。
+
+换句话说：**FTP 解析是"取景框"，TCP 流重组才是"相机"**。如果换一个明文协议
+（例如 HTTP 下载、TFTP），需要替换的只是"如何定位目标流"这一层，重组内核不用动。
+题目给定的样例是 FTP 明文传输，所以这一层按 FTP 实现。
+
 ## 目录结构
 
 ```text
 .
 ├── Makefile
 ├── README.md
-├── src/
-│   └── ftp_reassemble_info.c           # pcap/pcapng FTP 流重组 + tcp_info.json 输出
-├── ida/
-│   └── ida_dynamic_checklist.py         # IDA 内运行，生成 Markdown 报告和 JSON 约束
-└── tools/
-    ├── make_payloads_from_dynamic_json.py # 根据 JSON 结构化约束生成 payload
-    └── run_case.sh                        # QEMU + nc 自动验证单个 payload
+├── ftp_reassemble_info.c              # pcap/pcapng TCP 流重组（FTP 定位）+ tcp_info.json 输出
+├── ida_dynamic_checklist.py           # IDA 内运行，生成 Markdown 报告和 JSON 约束
+├── make_payloads_from_dynamic_json.py # 根据 JSON 结构化约束生成 payload
+└── run_case.sh                        # QEMU + nc 自动验证单个 payload
 ```
 
 ## 1. Ubuntu 依赖安装
@@ -62,7 +75,7 @@ make
 等价命令：
 
 ```bash
-gcc -O2 -Wall -Wextra -std=c11 -o ftp_reassemble_info src/ftp_reassemble_info.c -lpcap -lcrypto -lz
+gcc -O2 -Wall -Wextra -std=c11 -o ftp_reassemble_info ftp_reassemble_info.c -lpcap -lcrypto -lz
 ```
 
 ## 3. 从 pcapng 重组文件并生成 tcp_info.json
@@ -103,7 +116,7 @@ tcp_info.json       # 自动提取出的 TCP/FTP 信息与文件哈希
 ```text
 recovered_sample
 tcp_info.json
-ida/ida_dynamic_checklist.py
+ida_dynamic_checklist.py
 ```
 
 在 IDA 9.x 的 Python Console 中运行：
@@ -142,10 +155,10 @@ payload 生成器只读取 JSON 约束，不再解析中文报告，从而保证
 
 ## 5. 生成 payload
 
-把 `ida_dynamic_analysis.json`、`课程设计检查表_dynamic.md`、`tools/make_payloads_from_dynamic_json.py` 放在同一目录，运行：
+把 `ida_dynamic_analysis.json`、`课程设计检查表_dynamic.md`、`make_payloads_from_dynamic_json.py` 放在同一目录，运行：
 
 ```bash
-python3 tools/make_payloads_from_dynamic_json.py
+python3 make_payloads_from_dynamic_json.py
 ```
 
 生成：
@@ -164,13 +177,13 @@ payload_vuln_*.bin
 ```text
 recovered_sample
 payload_*.bin
-tools/run_case.sh
+run_case.sh
 ```
 
 验证某个 payload：
 
 ```bash
-./tools/run_case.sh payload_vuln_Vul_func2.bin
+./run_case.sh payload_vuln_Vul_func2.bin
 ```
 
 它会自动：
@@ -185,7 +198,7 @@ tools/run_case.sh
 Double Free：
 
 ```bash
-./tools/run_case.sh payload_vuln_Vul_func2.bin
+./run_case.sh payload_vuln_Vul_func2.bin
 grep -Ei "double|free|corrupt|abort|segv|sig" sample_stdout.log qemu_syscall.log trace.log
 ```
 
@@ -200,21 +213,21 @@ SIGABRT
 UAF：
 
 ```bash
-./tools/run_case.sh payload_vuln_Vul_func3.bin
+./run_case.sh payload_vuln_Vul_func3.bin
 grep -Ei "Before free|After free|mprotect|free|segv|sig" sample_stdout.log qemu_syscall.log trace.log
 ```
 
 整数溢出 / 越界写：
 
 ```bash
-./tools/run_case.sh payload_vuln_Vul_func45.bin
+./run_case.sh payload_vuln_Vul_func45.bin
 grep -Ei "count|overflow|out-of-bounds|segv|sig" sample_stdout.log qemu_syscall.log trace.log
 ```
 
 后门监听：
 
 ```bash
-./tools/run_case.sh payload_malware_Mal_func3.bin
+./run_case.sh payload_malware_Mal_func3.bin
 ```
 
 若恶意函数执行 `nc -l -p 54321 > hustlogo.png`，需要另开连接发送内容：

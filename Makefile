@@ -3,7 +3,7 @@ CFLAGS ?= -O2 -Wall -Wextra -std=c11
 LDLIBS ?= -lpcap -lcrypto -lz
 
 BIN := ftp_reassemble_info
-SRC := src/ftp_reassemble_info.c
+SRC := ftp_reassemble_info.c
 
 all: $(BIN)
 

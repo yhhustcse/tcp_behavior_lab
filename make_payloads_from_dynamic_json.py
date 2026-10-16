@@ -233,13 +233,13 @@ def append_report(entries: List[Dict[str, Any]], magic: str) -> None:
 
         f.write("## 通用验证脚本\n\n")
         f.write("```bash\n")
-        f.write("./tools/run_case.sh payload_vuln_Vul_func2.bin\n")
+        f.write("./run_case.sh payload_vuln_Vul_func2.bin\n")
         f.write("```\n\n")
 
         f.write("## 所有 payload 验证命令\n\n")
         f.write("```bash\n")
         for e in entries:
-            f.write("./tools/run_case.sh %s\n" % e["file"])
+            f.write("./run_case.sh %s\n" % e["file"])
         f.write("```\n\n")
 
         f.write("## 重点现象检查\n\n")
